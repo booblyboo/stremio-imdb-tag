@@ -8,15 +8,15 @@ var helpers = {
 	imdb: {
 
 		sorts: {
-			'popular': 'moviemeter,asc',
-			'new': 'release_date,desc',
-			'rating': 'user_rating,desc',
-			'alphabetical': 'alpha,asc',
-			'votes': 'num_votes,desc',
-			'longest': 'runtime,desc',
-			'shortest': 'runtime,asc',
-			'yearDesc': 'year,desc',
-			'yearAsc': 'year,asc'
+			'Popular': 'moviemeter,asc',
+			'New': 'release_date,desc',
+			'Rating': 'user_rating,desc',
+			'Alphabetical': 'alpha,asc',
+			'Votes': 'num_votes,desc',
+			'Longest': 'runtime,desc',
+			'Shortest': 'runtime,asc',
+			'Year Descending': 'year,desc',
+			'Year Ascending': 'year,asc'
 		},
 
 		toId: function(href) {
@@ -85,15 +85,9 @@ var helpers = {
 	},
 
 	sortsTitleMap: {
-		'popular': 'by Popularity',
-		'new': 'by Newest',
-		'rating': 'by Rating',
-		'alphabetical': 'by Alphabetical',
-		'votes': 'by Nr of Votes',
-		'longest': 'by Longest',
-		'shortest': 'by Shortest',
-		'yearDesc': 'by Year Descending',
-		'yearAsc': 'by Year Ascending'
+		'Popular': 'by Popularity',
+		'New': 'by Newest',
+		'Votes': 'by Nr of Votes',
 	}
 }
 
