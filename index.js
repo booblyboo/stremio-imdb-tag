@@ -1,18 +1,16 @@
 
-const express = require('express')
-const app = express()
-const cors = require('cors')
-
 const helpers = require('./helpers')
 const cheerio = require('cheerio')
 
-app.use(cors())
+const { config } = require('internal')
+
+const { addonBuilder, getRouter } = require('stremio-addon-sdk')
 
 const manifest = {
-	id: 'org.imdbtag',
+	id: 'org.imdbtag_local',
 	version: '0.0.1',
 	name: 'IMDB Tag Add-on',
-	description: 'Add-on to create a catalog from a IMDB tag.',
+	description: 'Add-on to create a catalog from a IMDB tag based on a link from IMDB.',
 	resources: ['catalog'],
 	types: ['movie', 'series'],
 	catalogs: [
@@ -28,37 +26,13 @@ const manifest = {
 	]
 }
 
-app.get('/:tagId/:sort?/manifest.json', (req, res) => {
-	const cacheTag = helpers.simplerText(req.params.tagId) + '[]' + (req.params.sort || 'popular')
-	const cloneManifest = JSON.parse(JSON.stringify(manifest))
-	cloneManifest.id += cacheTag
-	cloneManifest.name = helpers.toTitleCase(req.params.tagId) + ' ' + helpers.sortsTitleMap[req.params.sort || 'popular']
-	cloneManifest.catalogs.forEach((cat, ij) => {
-		cloneManifest.catalogs[ij].id += '-'+cacheTag
-		cloneManifest.catalogs[ij].name = helpers.toTitleCase(req.params.tagId) + ' ' + (cat.type == 'movie' ? 'Movies' : 'Series') + ' ' + helpers.sortsTitleMap[req.params.sort || 'popular']
-	})
-	res.setHeader('Cache-Control', 'max-age=604800') // one week
-	res.setHeader('Content-Type', 'application/json')
-    res.send(cloneManifest)
-})
+const builder = new addonBuilder(manifest)
 
 const needle = require('needle')
 
 const headers = {
 	'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/69.0.3497.100 Safari/537.36',
 	'Accept-Language': 'en-US,en;q=0.8',
-}
-
-const sortsMap = {
-	'popular': 'moviemeter,asc',
-	'new': 'release_date,desc',
-	'rating': 'user_rating,desc',
-	'alphabetical': 'alpha,asc',
-	'votes': 'num_votes,desc',
-	'longest': 'runtime,desc',
-	'shortest': 'runtime,asc',
-	'yearDesc': 'year,desc',
-	'yearAsc': 'year,asc'
 }
 
 function parseHeaderData(header) {
@@ -154,40 +128,67 @@ const queue = new namedQueue((task, cb) => {
 
 const cache = { movie: {}, series: {} }
 
-app.get('/:tagId/:sort?/catalog/:type/:id.json', (req, res) => {
-	const cacheTag = helpers.simplerText(req.params.tagId) + '[]' + (req.params.sort || 'popular')
-	function fail(err) {
-		console.error(err)
-		res.writeHead(500)
-		res.end(JSON.stringify({ err: 'handler error' }))
-	}
-	function respond(msg) {
-		res.setHeader('Cache-Control', 'max-age=604800') // one week
-		res.setHeader('Content-Type', 'application/json')
-		res.send(msg)
-	}
-	function fetch() {
-		queue.push({ id: req.params.tagId + '[]' + (req.params.sort || 'popular') }, (err, done) => {
-			if (done) {
-				const userData = cache[cacheTag][req.params.type]
-				respond(JSON.stringify({ metas: userData }))
-			} else 
-				fail(err || 'Could not get list items')
-		})
-	}
-	if (req.params.tagId && ['movie','series'].indexOf(req.params.type) > -1) {
-		if (cache[cacheTag] && cache[cacheTag][req.params.type]) {
-			const userData = cache[cacheTag][req.params.type]
-			if (userData.length)
-				respond(JSON.stringify({ metas: userData }))
-			else
-				fetch()
-		} else
-			fetch()
-	} else
-		fail('Unknown request parameters')
-})
+function retrieveManifest() {
+	const cacheTag = helpers.simplerText(tagId) + '[]' + (config.sort)
+	const cloneManifest = JSON.parse(JSON.stringify(manifest))
+	cloneManifest.id += cacheTag
+	cloneManifest.name = helpers.toTitleCase(tagId) + ' ' + (helpers.sortsTitleMap[config.sort] || ('by ' + config.sort))
+	cloneManifest.catalogs.forEach((cat, ij) => {
+		cloneManifest.catalogs[ij].id += '-'+cacheTag
+		cloneManifest.catalogs[ij].name = helpers.toTitleCase(tagId) + ' ' + (cat.type == 'movie' ? 'Movies' : 'Series') + ' ' + (helpers.sortsTitleMap[config.sort] || ('by ' + config.sort))
+	})
+    return cloneManifest
+}
 
-app.listen(7525, () => {
-    console.log('http://127.0.0.1:7525/[imdb-tag]/manifest.json')
-})
+let tagId
+
+async function retrieveRouter() {
+	return new Promise((resolve, reject) => {
+		if (!config.tagUrl) {
+			reject(Error('IMDB Tag Add-on - No Tag Url'))
+			return
+		} else {
+			if (!config.tagUrl.includes('.imdb.com/search/keyword?keywords=')) {
+				// https://www.imdb.com/search/keyword?keywords=hero&...
+				reject(Error('IMDB Tag Add-on - Invalid IMDB Tag URL, it should be in the form of: https://www.imdb.com/search/keyword?keywords=hero&...'))
+				return
+			} else {
+				let tempId = config.tagUrl.split('?keywords=')[1]
+				if (tempId.includes('&'))
+					tempId = tempId.split('&')[0]
+				tagId = tempId
+			}
+		}
+		const manifest = retrieveManifest()
+		const builder = new addonBuilder(manifest)
+		builder.defineCatalogHandler(args => {
+			return new Promise((resolve, reject) => {
+				const cacheTag = helpers.simplerText(tagId) + '[]' + config.sort
+				function fetch() {
+					queue.push({ id: tagId + '[]' + config.sort }, (err, done) => {
+						if (done) {
+							const userData = cache[cacheTag][args.type]
+							resolve({ metas: userData, cacheMaxAge: 604800 }) // one week
+						} else 
+							reject(Error(err || 'Could not get list items'))
+					})
+				}
+				if (tagId && ['movie','series'].indexOf(args.type) > -1) {
+					if (cache[cacheTag] && cache[cacheTag][args.type]) {
+						const userData = cache[cacheTag][args.type]
+						if (userData.length)
+							resolve({ metas: userData, cacheMaxAge: 604800 }) // one week
+						else
+							fetch()
+					} else
+						fetch()
+				} else
+					reject(Error('Unknown request parameters'))
+			})
+		})
+
+		resolve(getRouter(builder.getInterface()))
+	})
+}
+
+module.exports = retrieveRouter()
