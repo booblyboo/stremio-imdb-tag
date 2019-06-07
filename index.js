@@ -138,7 +138,7 @@ function retrieveManifest() {
     return cloneManifest
 }
 
-let tagId
+let tagId = ''
 
 async function retrieveRouter() {
 	return new Promise((resolve, reject) => {
