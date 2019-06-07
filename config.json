@@ -1,0 +1,14 @@
+{
+  "tagUrl": {
+    "title": "IMDB Tag URL",
+    "type": "string",
+    "default": "",
+    "required": true
+  },
+  "sort": {
+    "title": "Sorting",
+    "type": "select",
+    "options": ["Popular", "New", "Rating", "Alphabetical", "Votes", "Longest", "Shortest", "Year Descending", "Year Ascending"],
+    "default": "Popular"
+  }
+}
