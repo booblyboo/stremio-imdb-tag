@@ -168,7 +168,7 @@ async function retrieveRouter() {
 							const userData = cache[cacheTag][args.type]
 							resolve({ metas: userData, cacheMaxAge: 604800 }) // one week
 						} else 
-							reject(Error(err || 'Could not get list items'))
+							reject(err || Error('Could not get list items'))
 					})
 				}
 				if (tagId && ['movie','series'].indexOf(args.type) > -1) {
