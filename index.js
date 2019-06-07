@@ -26,8 +26,6 @@ const manifest = {
 	]
 }
 
-const builder = new addonBuilder(manifest)
-
 const needle = require('needle')
 
 const headers = {
